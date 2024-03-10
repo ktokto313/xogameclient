@@ -9,6 +9,8 @@
   <component name="ChangeListManager">
     <list default="true" id="3ba8429a-0952-4f41-80f7-ad7f1f96246a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -48,6 +50,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.rust.reset.selective.auto.import": "true",
     "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "C:/Users/LKT/Documents/GitHub/xogameclient",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
@@ -96,7 +99,8 @@
       <option name="presentableId" value="Default" />
       <updated>1709969245980</updated>
       <workItem from="1709969247045" duration="715000" />
-      <workItem from="1709970014489" duration="9880000" />
+      <workItem from="1709970014489" duration="10154000" />
+      <workItem from="1710034534457" duration="13038000" />
     </task>
     <servers />
   </component>
