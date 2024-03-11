@@ -5,7 +5,7 @@ use model::player::Player;
 use std::{io, thread};
 use std::future::Future;
 use std::io::Write;
-use reqwest::{Client, Request, StatusCode};
+use reqwest::{Client, Request, Response, StatusCode};
 use std::time::Duration;
 use log::error;
 use tokio::{join, try_join};
@@ -54,7 +54,6 @@ async fn login(client: Client) -> Option<Player> {
         .send()
         .await {
         Ok(response) => {
-            //TODO check 404
             if response.status() == StatusCode::OK {
                 println!("Login successfully");
                 return Some(Player{username, password})
@@ -108,15 +107,16 @@ async fn create_new_game(client: Client, player: Option<Player>) {
     if player.is_some() {
         let player = player.unwrap();
         let json_body = format!(r#"{{"username": "{}", "password": "{}" }}"#, player.username, player.password);
-        if let result = client.get(format!("{}{}", URL, "create_new_game")).body(json_body).send().await.unwrap().text().await.unwrap() {
-            //TODO check r status, if it's code 2xx and extract game id also
-            //TODO get into game loop
-            let game_id = "";
+        let response = client.get(format!("{}{}", URL, "create_new_game")).body(json_body).send().await.unwrap();
+        if response.status() == StatusCode::OK {
+            let game_id = response.text().await.unwrap().as_str();
             game_loop(client, player, true, game_id).await;
+        } else {
+            error!("Create new game {}{}", response.status(), response.text().await.unwrap())
+            println!("Error while creating new game session, please try again");
         }
-
     } else {
-        println!("Can't start game, if you have already logged in, please try again");
+        println!("Can't start game, please log in first");
     }
 }
 
@@ -130,14 +130,17 @@ async fn join_game(client: Client, player: Option<Player>) {
         let mut game_id = String::new();
         io::stdin().read_line(&mut game_id).expect("Bla");
         let json_body = format!(r#"{{"username": "{}", "password": "{}" }}"#, player.username, player.password);
-        if let r = client.post(format!("{}{}{}", URL, "join_game/", game_id)).body(json_body).send().await
-            .unwrap().text().await.unwrap() {
-            //TODO check r status, if it's code 2xx
-            //TODO get into game loop
+        let response = client.post(format!("{}{}{}", URL, "join_game/", game_id)).body(json_body).send().await
+            .unwrap();
+        if response.status() == StatusCode::OK {
+            game_id = response.text().await.unwrap();
             game_loop(client, player,false, game_id.as_str()).await;
+        } else {
+            error!("Join game {} {}", response.status(), response.text().await.unwrap());
+            println!("Error while joining game session, please try to join different game")
         }
     } else {
-        println!("Can't start game, if you have already logged in, please try to join different game");
+        println!("Can't start game, please log in first");
     }
 }
 
@@ -145,10 +148,19 @@ async fn game_loop(client: Client, player: Player, wait_for_player2: bool, game_
     let json_body = format!(r#"{{"username": "{}", "password": "{}" }}"#, player.username, player.password).as_str();
 
     if wait_for_player2 {
-        wait_for_player_two(client, player, game_id).await;
+        if !wait_for_player_two(client.clone(), player.clone(), game_id).await {
+            println!("Opponent surrendered");
+        }
+        println!("You are player 1");
+    } else {
+        println!("You are player 2");
     }
-
-
+    loop {
+        if !make_a_move(client.clone(), player.clone(), game_id).await && !wait_for_player_two(client.clone(), player.clone(), game_id).await {
+            break
+        }
+    }
+    println!("Game ended");
 }
 
 async fn print_loading_screen() {
@@ -160,28 +172,40 @@ async fn print_loading_screen() {
     }
 }
 
-async fn wait_for_player_two(client: Client, player: Player, game_id: &str) {
+async fn wait_for_player_two(client: Client, player: Player, game_id: &str) -> bool {
     let (tx, mut rx) = mpsc::channel(10);
     let json_body = format!(r#"{{"username": "{}", "password": "{}" }}"#, player.username, player.password);
-    let a = tokio::spawn(a(client.clone(), tx.clone(), json_body, game_id.to_string()));
-    let b = tokio::spawn(b(client.clone(), tx.clone(), player, game_id.to_string()));
+    tokio::spawn(wait_for_move(client.clone(), tx.clone(), json_body, game_id.to_string()));
+    tokio::spawn(wait_for_surrender(client.clone(), tx.clone(), player, game_id.to_string()));
     loop {
-        match rx.try_recv() {
-            Ok(_) => break,
+        let rx_value = rx.try_recv();
+        if let Ok(ref integer) = rx_value {
+            if integer == &0.to_string() {
+                return false;
+            }
+        }
+        match rx_value {
+            Ok(text) => {
+                println!("{}", text);
+                return true;
+            },
             Err(_) => print_loading_screen().await
         }
     }
 }
-async fn a(client: Client, tx: Sender<String>, json_body: String, game_id: String) {
+async fn wait_for_move(client: Client, tx: Sender<String>, json_body: String, game_id: String) {
     tx.send(client.post(format!("{}{}", URL, game_id)).body(json_body).send().await.unwrap().text().await.unwrap()).await.expect("bla");
 }
 
-async fn b(client: Client, tx: Sender<String>, player: Player, game_id: String) {
+async fn wait_for_surrender(client: Client, tx: Sender<String>, player: Player, game_id: String) {
     let mut user_input = String::new();
     io::stdin().read_line(&mut user_input).expect("bla");
     match user_input.trim().parse::<i32>() {
-        Ok(0) => { surrender(client, player, game_id).await }
-        _ => help_xo()
+        Ok(0) => {
+            surrender(client, player, game_id).await;
+            tx.send(0.to_string()).await.unwrap();
+        }
+        _ => help_surrender()
     }
 }
 
@@ -194,22 +218,66 @@ async fn wait_for_first_move(client: Client, player: Player, game_id: &str) -> b
     false
 }
 
-async fn make_a_move(client: Client, player: Player, game_id: &str) {
-    let mut player_input = String::new();
-    io::stdin().read_line(&mut player_input).expect("bruh");
+async fn make_a_move(client: Client, player: Player, game_id: &str) -> bool {
+    loop {
+        let mut player_input = String::new();
+        io::stdin().read_line(&mut player_input).expect("bruh");
 
-    match player_input.trim().parse::<i32>() {
-        Ok(0) => { surrender(client, player, game_id.to_string()).await;},
-        Ok(1..=9) => {
+        let player_input = player_input.trim().parse::<i32>();
 
-        },
-        _ => {help_xo()}
+        match player_input {
+            Ok(0) => {
+                surrender(client, player, game_id.to_string()).await;
+                return false;
+            },
+            Ok(1..=9) => {
+                let json_body = format!(r#"{{"username": "{}", "password": "{}" }}"#, player.username, player.password);
+                return if let Ok(response) = client.post(format!("{}{}{}{}", URL, game_id, "/make_a_move?move=", player_input.unwrap()))
+                    .body(json_body)
+                    .send()
+                    .await {
+                    let result = response.text().await.unwrap();
+                    if result.len() > 1 {
+                        println!("{}", result);
+                        true
+                    } else {
+                        let value = result.parse::<i32>().unwrap();
+                        if value == 1 {
+                            println!("Player 1 has won the game");
+                        } else if value == 2 {
+                            println!("Player 2 has won the game");
+                        } else {
+                            println!("Draw, no one won the game");
+                        }
+                        false
+                    }
+                } else {
+                    true
+                }
+            },
+            _ => { help_xo() }
+        }
     }
 }
 
 async fn surrender(client: Client, player: Player, game_id: String) {
-
+    let json_body = format!(r#"{{"username": "{}", "password": "{}" }}"#, player.username, player.password);
+    match client.post(format!("{}{}{}", URL, game_id, "/surrender"))
+        .body(json_body)
+        .send()
+        .await {
+        Ok(_) => println!("OK"),
+        Err(_) => println!("Server error")
+    }
 }
+
+// async fn check_for_server_status(r: Response) {
+//     match r {
+//         Ok(0) => println!("Opponent surrendered"),
+//         Ok(1) => println!("Opponent won"),
+//         Ok(2) => println!("You won")
+//     }
+// }
 
 fn help() {
     println!("Command: \n\
@@ -223,5 +291,10 @@ fn help() {
 fn help_xo() {
     println!("Command: \n\
     1-9 - make a move\n\
+    0 - surrender\n")
+}
+
+fn help_surrender() {
+    println!("Command: \n\
     0 - surrender\n")
 }
