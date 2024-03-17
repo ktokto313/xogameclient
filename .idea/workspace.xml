@@ -62,7 +62,7 @@
   }
 }</component>
   <component name="RunManager">
-    <configuration name="Run xogameclient" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+    <configuration name="Run xogameclient" type="CargoCommandRunConfiguration" factoryName="Cargo Command" singleton="false" temporary="true">
       <option name="command" value="run --package xogameclient --bin xogameclient" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
@@ -99,7 +99,9 @@
       <workItem from="1709969247045" duration="715000" />
       <workItem from="1709970014489" duration="10154000" />
       <workItem from="1710034534457" duration="13700000" />
-      <workItem from="1710119832016" duration="10909000" />
+      <workItem from="1710119832016" duration="10911000" />
+      <workItem from="1710378636084" duration="670000" />
+      <workItem from="1710646597089" duration="2381000" />
     </task>
     <servers />
   </component>
