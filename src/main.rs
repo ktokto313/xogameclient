@@ -30,6 +30,7 @@ async fn main() {
             "create new game" => create_new_game(client.clone(), player.clone()).await,
             "find game" => find_game(client.clone()).await,
             "join game" => join_game(client.clone(), player.clone()).await,
+            "scoreboard" => show_scoreboard(client.clone()).await,
             _ => help()
         }
     };
@@ -56,6 +57,7 @@ async fn login(client: Client) -> Option<Player> {
         Ok(response) => {
             if response.status() == StatusCode::OK {
                 println!("Login successfully");
+                //TODO join game
                 return Some(Player{username, password, session_id: "".to_string() })
             } else {
                 println!("Login failed");
@@ -294,6 +296,30 @@ async fn surrender(client: Client, player: Player, game_id: String) {
     }
 }
 
+async fn show_scoreboard(client: Client) {
+    match client.get(format!("{}{}", URL, "scoreboard"))
+        .send()
+        .await  {
+        Ok(resp) => {
+            if resp.status() == StatusCode::OK {
+                let vec:Vec<(String, String, String, String)> = serde_json::from_str(resp.text().await.unwrap().as_str()).unwrap();
+                println!("Scoreboard");
+                if vec.is_empty() {
+                    println!("No match was previously recorded")
+                }
+                for result in vec {
+                    println!("{:-<20}", "");
+                    println!("| {:<20} | {:<20} | {:<12} \n {}", result.0, result.1, result.2, result.3);
+                    println!("{:-<20}", "");
+                }
+            } else {
+                println!("Something was wrong with the server, you should contact admin")
+            }
+        },
+        Err(e) => println!("Something was wrong with the server, you should contact admin")
+    }
+}
+
 // async fn check_for_server_status(r: Response) {
 //     match r {
 //         Ok(0) => println!("Opponent surrendered"),
@@ -306,9 +332,10 @@ fn help() {
     println!("Command: \n\
     login - log into a created account\n\
     register - register a new account\n\
-    create_new_game - create a new xo game session\n\
-    find_game - list all game session waiting for player\n\
-    join_game - join game session")
+    create new game - create a new xo game session\n\
+    find game - list all game session waiting for player\n\
+    join game - join game session\n\
+    scoreboard - show 50 latest game")
 }
 
 fn help_xo() {
